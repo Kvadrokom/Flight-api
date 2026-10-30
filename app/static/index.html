@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск авиабилетов</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="tabs" role="navigation">
+        <div class="tabs-inner">
+            <a class="tab active" href="#tab-search">Поиск</a>
+            <a class="tab" href="#tab-calendar">Календарь цен</a>
+            <a class="tab" href="#tab-popular">Популярные</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <header class="header">
+            <h1>Поиск авиабилетов</h1>
+            <p class="subtitle">Цены из кэша Travelpayouts по выбранному маршруту</p>
+        </header>
+
+        <!-- ─────────────── Секция: Поиск ─────────────── -->
+        <section id="tab-search" class="tab-content">
+            <h2 class="section-title">Поиск билетов</h2>
+            <form id="search-form" class="search-form" autocomplete="off">
+                <div class="form-row">
+                    <label>
+                        Откуда
+                        <select id="origin" required>
+                            <option value="">— выберите город —</option>
+                        </select>
+                    </label>
+                    <label>
+                        Куда
+                        <select id="destination" required>
+                            <option value="">— выберите город —</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <label>
+                        Дата вылета
+                        <input type="date" id="depart-date">
+                    </label>
+                    <label>
+                        Дата возврата <span class="optional">(необязательно)</span>
+                        <input type="date" id="return-date">
+                    </label>
+                </div>
+
+                <div class="form-row form-row-inline">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="one-way">
+                        Только в одну сторону
+                    </label>
+                </div>
+
+                <button type="submit" id="submit-btn">Найти билеты</button>
+            </form>
+
+            <section id="status" class="status" hidden></section>
+            <section id="results" class="results"></section>
+        </section>
+
+        <!-- ─────────────── Секция: Календарь цен ─────────────── -->
+        <section id="tab-calendar" class="tab-content">
+            <h2 class="section-title">Календарь цен</h2>
+            <form id="calendar-form" class="search-form" autocomplete="off">
+                <div class="form-row">
+                    <label>
+                        Откуда
+                        <select id="cal-origin" required>
+                            <option value="">— выберите город —</option>
+                        </select>
+                    </label>
+                    <label>
+                        Куда
+                        <select id="cal-destination" required>
+                            <option value="">— выберите город —</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <label>
+                        Месяц вылета
+                        <input type="month" id="cal-month" required>
+                    </label>
+                    <label>
+                        Месяц возврата <span class="optional">(для туда-обратно)</span>
+                        <input type="month" id="cal-return-month">
+                    </label>
+                </div>
+
+                <button type="submit" id="calendar-btn">Показать календарь</button>
+            </form>
+
+            <section id="calendar-status" class="status" hidden></section>
+            <section id="calendar-results" class="calendar-grid"></section>
+        </section>
+
+        <!-- ─────────────── Секция: Популярные ─────────────── -->
+        <section id="tab-popular" class="tab-content">
+            <h2 class="section-title">Популярные направления</h2>
+            <form id="popular-form" class="search-form" autocomplete="off">
+                <div class="form-row">
+                    <label>
+                        Город вылета
+                        <select id="pop-origin" required>
+                            <option value="">— выберите город —</option>
+                        </select>
+                    </label>
+                    <label>
+                        Сколько показать
+                        <select id="pop-limit">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="30" selected>30</option>
+                            <option value="50">50</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button type="submit" id="popular-btn">Показать популярные</button>
+            </form>
+
+            <section id="popular-status" class="status" hidden></section>
+            <section id="popular-results" class="results"></section>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
