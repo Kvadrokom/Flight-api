@@ -1,16 +1,18 @@
-"""Бизнес-логика фичи prices: вызовы avia-api и нормализация ответов."""
-import httpx
+"""Бизнес-логика фичи prices: вызовы API и нормализация ответов."""
 
-from app.core.config import settings
 import logging
 from datetime import date, datetime
 from typing import Any
 
+import httpx
 from avia_api import AviaApiClient
 
+from app.core.config import settings
 from . import schemas
 
 logger = logging.getLogger(__name__)
+
+TRAVELPAYOUTS_BASE = "https://api.travelpayouts.com"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -19,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def _to_dict(obj: Any) -> dict:
-    """Приводит Pydantic-модель (SimplePrice) или dict к plain dict."""
-    if hasattr(obj, "model_dump"):       # Pydantic v2
+    """Pydantic-модель (SimplePrice) или dict → plain dict."""
+    if hasattr(obj, "model_dump"):
         return obj.model_dump()
-    if hasattr(obj, "dict"):             # Pydantic v1
+    if hasattr(obj, "dict"):
         return obj.dict()
     if isinstance(obj, dict):
         return obj
@@ -30,17 +32,15 @@ def _to_dict(obj: Any) -> dict:
 
 
 def _unwrap(raw: Any) -> Any:
-    """Если API вернул полный ответ с обёрткой {"data": ...} — достаём data."""
+    """Если API вернул {"data": ...} — достаём data."""
     if isinstance(raw, dict) and "data" in raw:
         inner = raw["data"]
-        # Если внутри data — только служебные поля, оставляем как есть
         if isinstance(inner, (dict, list)):
             return inner
     return raw
 
 
 def _parse_date(value: Any) -> date | None:
-    """Парсит дату из строки, datetime или date. Возвращает None при неудаче."""
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -55,12 +55,7 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
-def _entry_from_dict(
-    data: dict,
-    origin: str,
-    destination: str,
-) -> schemas.PriceEntry:
-    """Собирает PriceEntry из plain dict, безопасно извлекая поля."""
+def _entry_from_dict(data: dict, origin: str, destination: str) -> schemas.PriceEntry:
     return schemas.PriceEntry(
         origin=origin,
         destination=destination,
@@ -79,11 +74,7 @@ def _entry_from_dict(
 
 
 def _iter_cheap_like(raw: Any):
-    """
-    Итерирует по структуре, похожей на /prices/cheap:
-        {destination_code: {index: SimplePrice | dict}}
-    Yields (destination_code, entry_dict).
-    """
+    """Генератор по структуре {dest: {idx: entry}}."""
     if not isinstance(raw, dict):
         return
     for dest_code, by_index in raw.items():
@@ -94,7 +85,7 @@ def _iter_cheap_like(raw: Any):
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/cheap — дешёвые билеты по маршруту
+#  /prices/cheap
 # ─────────────────────────────────────────────────────────────
 
 
@@ -119,17 +110,17 @@ async def get_cheapest_prices(
     raw = await client.prices.cheap(**kwargs)
     raw = _unwrap(raw)
 
-    results: list[schemas.PriceEntry] = []
-    for dest_code, entry_dict in _iter_cheap_like(raw):
-        results.append(_entry_from_dict(entry_dict, request.origin, dest_code))
-
+    results = [
+        _entry_from_dict(d, request.origin, dest)
+        for dest, d in _iter_cheap_like(raw)
+    ]
     results.sort(key=lambda e: e.price)
     logger.info("Найдено %d записей", len(results))
     return results
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/popular — популярные направления из города
+#  /prices/popular — через httpx (avia-api требует destination)
 # ─────────────────────────────────────────────────────────────
 
 
@@ -137,16 +128,11 @@ async def get_popular_destinations(
     client: AviaApiClient,
     request: schemas.PopularRequest,
 ) -> list[schemas.PriceEntry]:
-    """Популярные направления из города — запрос без destination.
-
-    avia-api не позволяет опустить destination (обязательный позиционный аргумент),
-    поэтому обращаемся к Travelpayouts напрямую через httpx.
-    """
     logger.info("Популярные из %s (limit=%d)", request.origin, request.limit)
 
     async with httpx.AsyncClient(timeout=15.0) as http:
         response = await http.get(
-            "https://api.travelpayouts.com/v1/prices/cheap",
+            f"{TRAVELPAYOUTS_BASE}/v1/prices/cheap",
             params={"origin": request.origin},
             headers={"X-Access-Token": settings.travelpayouts_token},
         )
@@ -154,18 +140,17 @@ async def get_popular_destinations(
         payload = response.json()
 
     data = payload.get("data", {}) if isinstance(payload, dict) else {}
-
-    results: list[schemas.PriceEntry] = []
-    for dest_code, entry_dict in _iter_cheap_like(data):
-        results.append(_entry_from_dict(entry_dict, request.origin, dest_code))
-
+    results = [
+        _entry_from_dict(d, request.origin, dest)
+        for dest, d in _iter_cheap_like(data)
+    ]
     results.sort(key=lambda e: e.price)
     logger.info("Популярных направлений: %d", len(results))
     return results[: request.limit]
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/calendar — календарь минимальных цен на месяц
+#  /prices/calendar — через httpx (для calendar_type)
 # ─────────────────────────────────────────────────────────────
 
 
@@ -174,51 +159,61 @@ async def get_price_calendar(
     request: schemas.CalendarRequest,
 ) -> list[schemas.CalendarDay]:
     logger.info(
-        "Календарь цен: %s → %s, месяц %s",
+        "Календарь: %s → %s, месяц %s%s",
         request.origin, request.destination, request.depart_date,
+        f", return={request.return_date}" if request.return_date else " (one-way)",
     )
 
-    kwargs: dict = {
+    params: dict = {
         "origin": request.origin,
         "destination": request.destination,
         "depart_date": request.depart_date,
+        "calendar_type": "departure_date",
     }
     if request.return_date:
-        kwargs["return_date"] = request.return_date
+        params["return_date"] = request.return_date
 
-    raw = await client.prices.calendar(**kwargs)
-    raw = _unwrap(raw)
+    async with httpx.AsyncClient(timeout=15.0) as http:
+        response = await http.get(
+            f"{TRAVELPAYOUTS_BASE}/v1/prices/calendar",
+            params=params,
+            headers={"X-Access-Token": settings.travelpayouts_token},
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    data = payload.get("data", {}) if isinstance(payload, dict) else {}
 
     results: list[schemas.CalendarDay] = []
 
-    # calendar обычно возвращает {YYYY-MM-DD: SimplePrice | dict}
-    if isinstance(raw, dict):
-        for day_str, entry in raw.items():
+    if isinstance(data, dict):
+        for day_str, entry in data.items():
             day = _parse_date(day_str)
             if day is None:
                 continue
-            entry_dict = _to_dict(entry)
+            ed = _to_dict(entry)
             results.append(
                 schemas.CalendarDay(
                     day=day,
-                    price=float(entry_dict.get("price") or 0),
-                    airline=entry_dict.get("airline"),
-                    transfers=entry_dict.get("transfers"),
+                    price=float(ed.get("price") or 0),
+                    airline=ed.get("airline"),
+                    transfers=ed.get("transfers"),
+                    return_at=ed.get("return_at"),
                 )
             )
-    # На случай, если API вернёт список
-    elif isinstance(raw, list):
-        for item in raw:
-            entry_dict = _to_dict(item)
-            day = _parse_date(entry_dict.get("depart_date") or entry_dict.get("day"))
+    elif isinstance(data, list):
+        for item in data:
+            ed = _to_dict(item)
+            day = _parse_date(ed.get("depart_date") or ed.get("day"))
             if day is None:
                 continue
             results.append(
                 schemas.CalendarDay(
                     day=day,
-                    price=float(entry_dict.get("price") or 0),
-                    airline=entry_dict.get("airline"),
-                    transfers=entry_dict.get("transfers"),
+                    price=float(ed.get("price") or 0),
+                    airline=ed.get("airline"),
+                    transfers=ed.get("transfers"),
+                    return_at=ed.get("return_at"),
                 )
             )
 
@@ -228,7 +223,7 @@ async def get_price_calendar(
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/month-matrix — матрица цен на месяц
+#  /prices/month-matrix
 # ─────────────────────────────────────────────────────────────
 
 
@@ -237,7 +232,7 @@ async def get_month_matrix(
     request: schemas.MonthMatrixRequest,
 ) -> list[schemas.MatrixDay]:
     logger.info(
-        "Матрица цен: %s → %s, месяц %s",
+        "Матрица: %s → %s, месяц %s",
         request.origin, request.destination, request.month,
     )
 
@@ -248,9 +243,6 @@ async def get_month_matrix(
     )
     raw = _unwrap(raw)
 
-    results: list[schemas.MatrixDay] = []
-
-    # month-matrix обычно возвращает список словарей
     if isinstance(raw, list):
         items = raw
     elif isinstance(raw, dict):
@@ -258,18 +250,19 @@ async def get_month_matrix(
     else:
         items = []
 
+    results: list[schemas.MatrixDay] = []
     for item in items:
-        entry_dict = _to_dict(item)
-        day = _parse_date(entry_dict.get("depart_date") or entry_dict.get("day"))
+        ed = _to_dict(item)
+        day = _parse_date(ed.get("depart_date") or ed.get("day"))
         if day is None:
             continue
         results.append(
             schemas.MatrixDay(
                 day=day,
-                price=float(entry_dict.get("price") or 0),
-                airline=entry_dict.get("airline"),
-                transfers=entry_dict.get("transfers"),
-                flight_number=entry_dict.get("flight_number"),
+                price=float(ed.get("price") or 0),
+                airline=ed.get("airline"),
+                transfers=ed.get("transfers"),
+                flight_number=ed.get("flight_number"),
             )
         )
 
@@ -279,7 +272,7 @@ async def get_month_matrix(
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/latest — последние найденные цены
+#  /prices/latest
 # ─────────────────────────────────────────────────────────────
 
 
@@ -303,28 +296,20 @@ async def get_latest_prices(
 
     results: list[schemas.PriceEntry] = []
 
-    # Структура как cheap: {dest_code: {idx: entry}}
     if isinstance(raw, dict) and raw and not isinstance(next(iter(raw.values())), list):
-        for dest_code, entry_dict in _iter_cheap_like(raw):
-            results.append(
-                _entry_from_dict(
-                    entry_dict,
-                    origin=request.origin or "—",
-                    destination=dest_code,
-                )
-            )
-    # Структура как список: [{origin, destination, price, ...}]
+        for dest, d in _iter_cheap_like(raw):
+            results.append(_entry_from_dict(d, request.origin or "—", dest))
     elif isinstance(raw, list):
         for item in raw:
-            entry_dict = _to_dict(item)
+            ed = _to_dict(item)
             results.append(
                 _entry_from_dict(
-                    entry_dict,
-                    origin=entry_dict.get("origin") or request.origin or "—",
-                    destination=entry_dict.get("destination") or request.destination or "—",
+                    ed,
+                    origin=ed.get("origin") or request.origin or "—",
+                    destination=ed.get("destination") or request.destination or "—",
                 )
             )
 
     results.sort(key=lambda e: e.price)
-    logger.info("Последние: %d записей", len(results))
+    logger.info("Последних: %d", len(results))
     return results

@@ -12,10 +12,13 @@ const AIRLINES = {
     HY: 'Uzbekistan Airways', KC: 'Air Astana',
 };
 
-// Все селекты городов на странице
 const CITY_SELECTS = ['origin', 'destination', 'cal-origin', 'cal-destination', 'pop-origin'];
 
-// Словарь {code: name}, заполняется при загрузке городов
+const MONTHS_RU = [
+    'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+    'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+];
+
 let CITY_NAMES = {};
 
 const $ = (id) => document.getElementById(id);
@@ -57,9 +60,17 @@ function formatDuration(minutes) {
     return m ? `${h} ч ${m} мин` : `${h} ч`;
 }
 
+function formatMonth(yyyymm) {
+    // "2026-12" → "декабрь 2026"
+    if (!yyyymm) return '';
+    const [y, m] = yyyymm.split('-').map(Number);
+    if (!y || !m || m < 1 || m > 12) return yyyymm;
+    return `${MONTHS_RU[m - 1]} ${y}`;
+}
+
 
 // ─────────────────────────────────────────────────────────────
-//  Загрузка городов и заполнение селектов
+//  Загрузка городов
 // ─────────────────────────────────────────────────────────────
 
 async function loadCities() {
@@ -72,9 +83,7 @@ function populateSelects(cities) {
     for (const selectId of CITY_SELECTS) {
         const select = $(selectId);
         if (!select) continue;
-
         const sorted = [...cities].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-
         for (const city of sorted) {
             const opt = document.createElement('option');
             opt.value = city.code;
@@ -86,7 +95,7 @@ function populateSelects(cities) {
 
 
 // ─────────────────────────────────────────────────────────────
-//  Якорные табы + подсветка активного при скролле
+//  Якорные табы + подсветка при скролле
 // ─────────────────────────────────────────────────────────────
 
 function initTabs() {
@@ -119,7 +128,7 @@ function initTabs() {
 
 
 // ─────────────────────────────────────────────────────────────
-//  Рендер карточек результатов (поиск + популярные)
+//  Карточки результатов
 // ─────────────────────────────────────────────────────────────
 
 function renderResults(entries, container, statusEl) {
@@ -174,7 +183,7 @@ function renderResults(entries, container, statusEl) {
 
 
 // ─────────────────────────────────────────────────────────────
-//  Вкладка «Поиск» — /prices/cheap
+//  Поиск
 // ─────────────────────────────────────────────────────────────
 
 async function onSearchSubmit(e) {
@@ -230,19 +239,48 @@ async function onSearchSubmit(e) {
 
 
 // ─────────────────────────────────────────────────────────────
-//  Вкладка «Календарь цен» — /prices/calendar
+//  Календарь цен
 // ─────────────────────────────────────────────────────────────
 
-function renderCalendar(days, container, statusEl) {
+function renderCalendar(days, container, statusEl, meta) {
     container.innerHTML = '';
 
+    // Заголовок и легенда
+    const header = document.createElement('div');
+    header.className = 'calendar-header';
+
+    const title = document.createElement('div');
+    title.className = 'calendar-title';
+    title.textContent = `Цены на ${meta.monthLabel}`;
+
+    const legend = document.createElement('div');
+    legend.className = 'calendar-legend';
+    legend.innerHTML = meta.isRoundTrip
+        ? '<span class="badge badge-round">туда-обратно</span> <span class="legend-note">(где доступны в кэше)</span>'
+        : '<span class="badge badge-oneway">в одну сторону</span> <span class="legend-note">(за 1 взрослого)</span>';
+
+    header.appendChild(title);
+    header.appendChild(legend);
+    container.appendChild(header);
+
     if (!days.length) {
-        setStatusFor(statusEl, 'Нет данных за этот месяц. Попробуйте другой месяц или маршрут.', 'info');
+        const empty = document.createElement('div');
+        empty.className = 'calendar-empty';
+        empty.textContent = 'Нет данных за этот месяц. Попробуйте другой месяц или маршрут.';
+        container.appendChild(empty);
+        setStatusFor(statusEl, '', 'info');
         return;
     }
 
     const min = Math.min(...days.map(d => d.price));
-    setStatusFor(statusEl, `Дней с ценами: ${days.length}. Минимум: ${Math.round(min).toLocaleString('ru-RU')} ₽`, 'info');
+    setStatusFor(
+        statusEl,
+        `Дней с ценами: ${days.length}. Минимум: ${Math.round(min).toLocaleString('ru-RU')} ₽`,
+        'info',
+    );
+
+    const grid = document.createElement('div');
+    grid.className = 'calendar-grid';
 
     for (const d of days) {
         const cell = document.createElement('div');
@@ -250,12 +288,17 @@ function renderCalendar(days, container, statusEl) {
         if (d.price === min) cell.classList.add('cheapest');
 
         const dayNum = new Date(d.day).getDate();
+        const mark = meta.isRoundTrip && d.return_at
+            ? '<span class="cal-return" title="Есть дата возврата">⇄</span>'
+            : '';
+
         cell.innerHTML = `
-            <span class="cal-day">${dayNum}</span>
+            <span class="cal-day">${dayNum}${mark}</span>
             <span class="cal-price">${Math.round(d.price).toLocaleString('ru-RU')} ₽</span>
         `;
-        container.appendChild(cell);
+        grid.appendChild(cell);
     }
+    container.appendChild(grid);
 }
 
 async function onCalendarSubmit(e) {
@@ -263,18 +306,23 @@ async function onCalendarSubmit(e) {
     const statusEl = $('calendar-status');
     const resultsEl = $('calendar-results');
     resultsEl.innerHTML = '';
+    setStatusFor(statusEl, '', 'info');
 
     const origin = $('cal-origin').value;
     const destination = $('cal-destination').value;
     const departDate = $('cal-month').value;
     const returnMonth = $('cal-return-month').value;
 
-    if (!origin || !destination || !departDate) {
-        setStatusFor(statusEl, 'Выберите города и месяц вылета', 'error');
+    if (!origin || !destination) {
+        setStatusFor(statusEl, 'Выберите города вылета и прилёта', 'error');
         return;
     }
     if (origin === destination) {
         setStatusFor(statusEl, 'Города вылета и прилёта не должны совпадать', 'error');
+        return;
+    }
+    if (!departDate) {
+        setStatusFor(statusEl, 'Укажите месяц вылета — иначе непонятно, за какой период строить календарь', 'error');
         return;
     }
 
@@ -295,7 +343,11 @@ async function onCalendarSubmit(e) {
             throw new Error(`Ошибка ${res.status}: ${errText.slice(0, 200)}`);
         }
         const days = await res.json();
-        renderCalendar(days, resultsEl, statusEl);
+
+        renderCalendar(days, resultsEl, statusEl, {
+            monthLabel: formatMonth(departDate),
+            isRoundTrip: !!returnMonth,
+        });
     } catch (err) {
         setStatusFor(statusEl, `Не удалось загрузить календарь: ${err.message}`, 'error');
     } finally {
@@ -305,7 +357,7 @@ async function onCalendarSubmit(e) {
 
 
 // ─────────────────────────────────────────────────────────────
-//  Вкладка «Популярные» — /prices/popular
+//  Популярные направления
 // ─────────────────────────────────────────────────────────────
 
 async function onPopularSubmit(e) {
@@ -354,7 +406,6 @@ async function init() {
 
     try {
         const cities = await loadCities();
-        // Строим словарь {code: name} для cityLabel()
         CITY_NAMES = Object.fromEntries(cities.map(c => [c.code, c.name]));
         populateSelects(cities);
     } catch (err) {

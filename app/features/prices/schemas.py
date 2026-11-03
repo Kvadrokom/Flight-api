@@ -1,38 +1,21 @@
 """Pydantic-схемы фичи prices: запросы и ответы для всех эндпоинтов цен."""
 
+import re
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/cheap — поиск дешёвых билетов по маршруту
+#  /prices/cheap
 # ─────────────────────────────────────────────────────────────
 
 
 class PriceSearchRequest(BaseModel):
-    """Запрос на поиск дешёвых билетов."""
-
-    origin: str = Field(
-        ...,
-        min_length=2,
-        max_length=3,
-        description="IATA-код города вылета, например MOW",
-    )
-    destination: str = Field(
-        ...,
-        min_length=2,
-        max_length=3,
-        description="IATA-код города прилёта, например LED",
-    )
-    depart_date: str | None = Field(
-        None,
-        description="Дата вылета: YYYY-MM-DD или YYYY-MM",
-    )
-    return_date: str | None = Field(
-        None,
-        description="Дата возврата: YYYY-MM-DD или YYYY-MM",
-    )
+    origin: str = Field(..., min_length=2, max_length=3)
+    destination: str = Field(..., min_length=2, max_length=3)
+    depart_date: str | None = Field(None, description="Дата вылета: YYYY-MM-DD или YYYY-MM")
+    return_date: str | None = Field(None, description="Дата возврата: YYYY-MM-DD или YYYY-MM")
     one_way: bool | None = Field(
         None,
         description="true — только в одну сторону, false — только туда-обратно, null — без фильтра",
@@ -40,8 +23,6 @@ class PriceSearchRequest(BaseModel):
 
 
 class PriceEntry(BaseModel):
-    """Одна запись о цене (используется в /cheap, /popular, /latest)."""
-
     origin: str
     destination: str
     price: float
@@ -55,7 +36,6 @@ class PriceEntry(BaseModel):
 
     transfers: int | None = None
 
-    # Длительность в минутах
     duration: int | None = None
     duration_to: int | None = None
     duration_back: int | None = None
@@ -64,83 +44,59 @@ class PriceEntry(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/popular — популярные направления из города
+#  /prices/popular
 # ─────────────────────────────────────────────────────────────
 
 
 class PopularRequest(BaseModel):
-    """Запрос на популярные направления из города (без destination)."""
-
-    origin: str = Field(
-        ...,
-        min_length=2,
-        max_length=3,
-        description="IATA-код города вылета",
-    )
-    limit: int = Field(
-        30,
-        ge=1,
-        le=100,
-        description="Максимум записей в ответе",
-    )
+    origin: str = Field(..., min_length=2, max_length=3)
+    limit: int = Field(30, ge=1, le=100)
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/calendar — календарь минимальных цен на месяц
+#  /prices/calendar
 # ─────────────────────────────────────────────────────────────
 
 
 class CalendarRequest(BaseModel):
-    """Запрос календаря цен на месяц."""
-
     origin: str = Field(..., min_length=2, max_length=3)
     destination: str = Field(..., min_length=2, max_length=3)
-    depart_date: str = Field(
-        ...,
-        description="Месяц в формате YYYY-MM (например, 2026-12)",
-    )
-    return_date: str | None = Field(
-        None,
-        description="Месяц возврата YYYY-MM (для round-trip)",
-    )
+    depart_date: str = Field(..., description="Месяц вылета в формате YYYY-MM")
+    return_date: str | None = Field(None, description="Месяц возврата YYYY-MM (для round-trip)")
+
+    @field_validator("depart_date", "return_date")
+    @classmethod
+    def _validate_month(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not re.fullmatch(r"\d{4}-\d{2}", v):
+            raise ValueError("Ожидается формат YYYY-MM, например 2026-12")
+        return v
 
 
 class CalendarDay(BaseModel):
-    """Минимальная цена за конкретный день месяца."""
-
     day: date
     price: float
     airline: str | None = None
     transfers: int | None = None
+    # Заполнен, если у записи есть дата возврата (round-trip)
+    return_at: datetime | None = None
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/month-matrix — матрица цен на месяц
+#  /prices/month-matrix
 # ─────────────────────────────────────────────────────────────
 
 
 class MonthMatrixRequest(BaseModel):
-    """Запрос матрицы цен на месяц."""
-
     origin: str = Field(..., min_length=2, max_length=3)
     destination: str = Field(..., min_length=2, max_length=3)
-    month: str = Field(
-        ...,
-        description="Месяц YYYY-MM или первое число YYYY-MM-01",
-    )
-    currency: str = Field(
-        "rub",
-        description="Валюта цен: rub, usd, eur",
-    )
-    show_to_affiliates: bool = Field(
-        True,
-        description="true — показывать цены партнёра, false — цены обычного пользователя",
-    )
+    month: str = Field(..., description="Месяц YYYY-MM или первое число YYYY-MM-01")
+    currency: str = Field("rub")
+    show_to_affiliates: bool = Field(True)
 
 
 class MatrixDay(BaseModel):
-    """Одна строка матрицы цен: день, цена, пересадки."""
-
     day: date
     price: float
     airline: str | None = None
@@ -149,28 +105,11 @@ class MatrixDay(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────
-#  /prices/latest — последние найденные цены
+#  /prices/latest
 # ─────────────────────────────────────────────────────────────
 
 
 class LatestRequest(BaseModel):
-    """Запрос последних найденных цен (без обязательного маршрута)."""
-
-    origin: str | None = Field(
-        None,
-        min_length=2,
-        max_length=3,
-        description="Если указан — только вылеты из этого города",
-    )
-    destination: str | None = Field(
-        None,
-        min_length=2,
-        max_length=3,
-        description="Если указан — только прилёты в этот город",
-    )
-    limit: int = Field(
-        30,
-        ge=1,
-        le=100,
-        description="Максимум записей",
-    )
+    origin: str | None = Field(None, min_length=2, max_length=3)
+    destination: str | None = Field(None, min_length=2, max_length=3)
+    limit: int = Field(30, ge=1, le=100)

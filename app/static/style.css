@@ -2,13 +2,9 @@
    База
    ───────────────────────────────────────────────────────────── */
 
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html {
-    scroll-behavior: smooth;   /* плавная прокрутка при якорной навигации */
-}
+html { scroll-behavior: smooth; }
 
 body {
     margin: 0;
@@ -29,26 +25,13 @@ body {
    Шапка
    ───────────────────────────────────────────────────────────── */
 
-.header {
-    text-align: center;
-    margin-bottom: 24px;
-}
-
-.header h1 {
-    margin: 0 0 8px;
-    font-size: 28px;
-    font-weight: 600;
-}
-
-.subtitle {
-    color: #6b7688;
-    margin: 0;
-    font-size: 15px;
-}
+.header { text-align: center; margin-bottom: 24px; }
+.header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 600; }
+.subtitle { color: #6b7688; margin: 0; font-size: 15px; }
 
 
 /* ─────────────────────────────────────────────────────────────
-   Липкая навигация (якорные табы)
+   Липкая навигация
    ───────────────────────────────────────────────────────────── */
 
 .tabs {
@@ -81,15 +64,8 @@ body {
     transition: color 0.15s, background 0.15s;
 }
 
-.tab:hover {
-    color: #1a2233;
-    background: #e8eef7;
-}
-
-.tab.active {
-    color: #3b82f6;
-    background: #e8f0fe;
-}
+.tab:hover { color: #1a2233; background: #e8eef7; }
+.tab.active { color: #3b82f6; background: #e8f0fe; }
 
 
 /* ─────────────────────────────────────────────────────────────
@@ -99,8 +75,6 @@ body {
 .tab-content {
     padding: 24px 0;
     margin-bottom: 40px;
-    /* Отступ сверху при якорном скролле, чтобы липкое меню
-       не перекрывало заголовок секции */
     scroll-margin-top: 80px;
 }
 
@@ -139,10 +113,7 @@ body {
     color: #45516b;
 }
 
-.optional {
-    font-weight: 400;
-    color: #9aa3b5;
-}
+.optional { font-weight: 400; color: #9aa3b5; }
 
 .form-row select,
 .form-row input {
@@ -163,11 +134,7 @@ body {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-/* Строка с чекбоксом */
-.form-row-inline {
-    grid-template-columns: 1fr;
-    margin-bottom: 16px;
-}
+.form-row-inline { grid-template-columns: 1fr; margin-bottom: 16px; }
 
 .checkbox-label {
     flex-direction: row !important;
@@ -203,14 +170,8 @@ button {
     transition: background 0.15s;
 }
 
-button:hover:not(:disabled) {
-    background: #2563eb;
-}
-
-button:disabled {
-    background: #93b8f0;
-    cursor: not-allowed;
-}
+button:hover:not(:disabled) { background: #2563eb; }
+button:disabled { background: #93b8f0; cursor: not-allowed; }
 
 
 /* ─────────────────────────────────────────────────────────────
@@ -225,25 +186,15 @@ button:disabled {
     font-size: 15px;
 }
 
-.status.info {
-    background: #e8f0fe;
-    color: #1a4b8a;
-}
-
-.status.error {
-    background: #fde8e8;
-    color: #b91c1c;
-}
+.status.info { background: #e8f0fe; color: #1a4b8a; }
+.status.error { background: #fde8e8; color: #b91c1c; }
 
 
 /* ─────────────────────────────────────────────────────────────
-   Карточки результатов (cheap / popular)
+   Карточки результатов
    ───────────────────────────────────────────────────────────── */
 
-.results {
-    display: grid;
-    gap: 12px;
-}
+.results { display: grid; gap: 12px; }
 
 .card {
     background: #fff;
@@ -256,21 +207,10 @@ button:disabled {
     align-items: center;
 }
 
-.card-info h3 {
-    margin: 0 0 6px;
-    font-size: 16px;
-    font-weight: 600;
-}
+.card-info h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.card-info p { margin: 2px 0; font-size: 14px; color: #5b6478; }
 
-.card-info p {
-    margin: 2px 0;
-    font-size: 14px;
-    color: #5b6478;
-}
-
-.card-price {
-    text-align: right;
-}
+.card-price { text-align: right; }
 
 .card-price .amount {
     display: block;
@@ -299,13 +239,11 @@ button:disabled {
     transition: background 0.15s;
 }
 
-.card-price a:hover {
-    background: #e8f0fe;
-}
+.card-price a:hover { background: #e8f0fe; }
 
 
 /* ─────────────────────────────────────────────────────────────
-   Бейджи one-way / round-trip
+   Бейджи
    ───────────────────────────────────────────────────────────── */
 
 .badge {
@@ -318,20 +256,48 @@ button:disabled {
     vertical-align: middle;
 }
 
-.badge-round {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.badge-oneway {
-    background: #e8f0fe;
-    color: #1a4b8a;
-}
+.badge-round { background: #fef3c7; color: #92400e; }
+.badge-oneway { background: #e8f0fe; color: #1a4b8a; }
 
 
 /* ─────────────────────────────────────────────────────────────
    Календарь цен
    ───────────────────────────────────────────────────────────── */
+
+.calendar-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 0 4px;
+}
+
+.calendar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a2233;
+}
+
+.calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #5b6478;
+}
+
+.legend-note { color: #9aa3b5; font-size: 12px; }
+
+.calendar-empty {
+    padding: 24px;
+    text-align: center;
+    color: #6b7688;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(20, 30, 55, 0.06);
+}
 
 .calendar-grid {
     display: grid;
@@ -343,10 +309,6 @@ button:disabled {
     box-shadow: 0 2px 12px rgba(20, 30, 55, 0.06);
 }
 
-.calendar-grid:empty {
-    display: none;
-}
-
 .cal-cell {
     padding: 8px 6px;
     border-radius: 6px;
@@ -355,15 +317,9 @@ button:disabled {
     font-size: 12px;
 }
 
-.cal-cell.cheapest {
-    background: #d1fae5;
-    font-weight: 600;
-}
+.cal-cell.cheapest { background: #d1fae5; font-weight: 600; }
 
-.cal-day {
-    display: block;
-    color: #5b6478;
-}
+.cal-day { display: block; color: #5b6478; }
 
 .cal-price {
     display: block;
@@ -373,33 +329,24 @@ button:disabled {
     font-weight: 600;
 }
 
+.cal-return {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 10px;
+    color: #3b82f6;
+    vertical-align: super;
+}
+
 
 /* ─────────────────────────────────────────────────────────────
    Адаптив
    ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 640px) {
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-
-    .card {
-        grid-template-columns: 1fr;
-    }
-
-    .card-price {
-        text-align: left;
-    }
-
-    .calendar-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-
-    .header h1 {
-        font-size: 24px;
-    }
-
-    .section-title {
-        font-size: 18px;
-    }
+    .form-row { grid-template-columns: 1fr; }
+    .card { grid-template-columns: 1fr; }
+    .card-price { text-align: left; }
+    .calendar-grid { grid-template-columns: repeat(4, 1fr); }
+    .header h1 { font-size: 24px; }
+    .section-title { font-size: 18px; }
 }
